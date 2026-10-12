@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prediksi Overbreak</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Konsep: lembar kerja teknik tambang bawah tanah. Kalkulator di paling atas, penampang terowongan sebagai
+   gambar utama yang berubah mengikuti prediksi. Biru = regresi linear, oranye = ANFIS, di semua grafik. */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --surface-2:#f5f7f9; --ink:#10161d; --ink-2:#475463; --ink-3:#5d6977;
+  --line:#d9dfe6; --line-2:#c6cfd8;
+  --reg:#2a78d6; --anf:#eb6834;
+  --good:#17794a; --good-bg:#e1f2e8; --bad:#b42d22; --bad-bg:#fbe8e5; --mid:#8a5a00; --mid-bg:#fbf0d9;
+  --rock:#dfe5ea; --rock-line:#c3ccd5; --void:#0f1419;
+  --f-disp:'IBM Plex Sans Condensed','Arial Narrow',system-ui,sans-serif;
+  --f-body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1116; --surface:#151b22; --surface-2:#1b232c; --ink:#eaeef2; --ink-2:#aab5c1; --ink-3:#8f9ba9;
+    --line:#28323d; --line-2:#37424f;
+    --reg:#3987e5; --anf:#d95926;
+    --good:#52c68c; --good-bg:#12301f; --bad:#ff8f82; --bad-bg:#3a1a17; --mid:#e8b44a; --mid-bg:#352a10;
+    --rock:#1f2832; --rock-line:#2c3743; --void:#06090c; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d1116; --surface:#151b22; --surface-2:#1b232c; --ink:#eaeef2; --ink-2:#aab5c1; --ink-3:#8f9ba9;
+  --line:#28323d; --line-2:#37424f;
+  --reg:#3987e5; --anf:#d95926;
+  --good:#52c68c; --good-bg:#12301f; --bad:#ff8f82; --bad-bg:#3a1a17; --mid:#e8b44a; --mid-bg:#352a10;
+  --rock:#1f2832; --rock-line:#2c3743; --void:#06090c; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+body{background:var(--bg);color:var(--ink);font:400 15px/1.55 var(--f-body);padding-inline:clamp(16px,3vw,32px);padding-block:0 56px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin-inline:auto}
+h1,h2,h3{font-family:var(--f-disp);margin:0;text-wrap:balance;letter-spacing:-.005em}
+h1{font-size:clamp(28px,4.2vw,44px);line-height:1.08;font-weight:700}
+h2{font-size:clamp(22px,2.6vw,28px);line-height:1.15;font-weight:600}
+h3{font-size:17px;font-weight:600}
+p{margin:0}
+.mono,.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font:600 12px/1 var(--f-disp);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:4px}
+
+/* header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;margin-inline:calc(-1*clamp(16px,3vw,32px));padding-inline:clamp(16px,3vw,32px);background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:56px}
+.brand{display:flex;align-items:baseline;gap:10px;white-space:nowrap}
+.brand b{font:700 18px/1 var(--f-disp);letter-spacing:.01em}
+.brand span{font:500 12px/1 var(--f-mono);color:var(--ink-3)}
+.nav{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;min-width:0}
+.nav::-webkit-scrollbar{display:none}
+.nav a{padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:500;font-size:14px;color:var(--ink-2);white-space:nowrap}
+.nav a:hover{background:var(--surface);color:var(--ink)}
+@media (max-width:640px){.brand span{display:none}}
+
+section{padding-block:56px 8px}
+.sec-h{display:flex;flex-direction:column;gap:10px;margin-bottom:24px;max-width:70ch}
+.sec-h p{color:var(--ink-2)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px}
+.card.flat{padding:0;overflow:hidden}
+
+/* hero + calculator */
+.hero{padding-block:36px 0}
+.hero p.lead{margin-top:14px;max-width:62ch;color:var(--ink-2);font-size:17px}
+.calc{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:20px;margin-top:28px;align-items:start}
+@media (max-width:920px){.calc{grid-template-columns:minmax(0,1fr)}}
+.panel-h{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.presets{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:500 13px/1 var(--f-body);padding:9px 12px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);cursor:pointer}
+.btn:hover{background:var(--surface-2);border-color:var(--ink-3)}
+.btn.solid{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.btn.solid:hover{opacity:.88;background:var(--ink)}
+.prm{padding-block:14px;border-top:1px solid var(--line)}
+.prm:first-of-type{border-top:0}
+.prm-h{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.prm-h label{display:flex;flex-direction:column;gap:2px;min-width:0}
+.prm-h label b{font:600 16px/1.1 var(--f-disp);letter-spacing:.01em}
+.prm-h label span{font-size:12.5px;color:var(--ink-3)}
+.nin{display:flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:8px;padding:0 10px;background:var(--surface-2);height:36px}
+.nin input{width:68px;border:0;background:transparent;color:var(--ink);font:500 15px var(--f-mono);text-align:right;outline:none;padding:0}
+.nin:focus-within{border-color:var(--ink)}
+.nin small{font:12px var(--f-mono);color:var(--ink-3)}
+.rng{position:relative;margin-top:12px;height:22px}
+.rng input{-webkit-appearance:none;appearance:none;width:100%;height:22px;margin:0;background:transparent;cursor:pointer;position:relative;z-index:2}
+.rng input::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--ink-2) var(--p,50%),var(--line) var(--p,50%))}
+.rng input::-moz-range-track{height:4px;border-radius:2px;background:var(--line)}
+.rng input::-moz-range-progress{height:4px;border-radius:2px;background:var(--ink-2)}
+.rng input::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--ink);border:3px solid var(--surface);box-shadow:0 0 0 1px var(--ink);margin-top:-8px}
+.rng input::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--ink);border:3px solid var(--surface);box-shadow:0 0 0 1px var(--ink)}
+.rng .mean{position:absolute;top:13px;width:2px;height:9px;background:var(--ink-3);z-index:1;transform:translateX(-1px);border-radius:1px}
+.prm-f{display:flex;justify-content:space-between;font:12px var(--f-mono);color:var(--ink-3);margin-top:2px}
+
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{font:500 13px/1 var(--f-body);padding:8px 12px;border:0;background:transparent;color:var(--ink-2);border-radius:7px;cursor:pointer}
+.seg button[aria-pressed="true"],.seg button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--line-2),0 1px 2px rgba(0,0,0,.08)}
+.seg .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:0}
+
+.stage{position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--rock)}
+.stage svg{display:block;width:100%;height:auto}
+.stage-top{position:absolute;left:14px;top:12px;right:14px;display:flex;justify-content:space-between;gap:10px;pointer-events:none}
+.stage-top .tag{font:600 12px/1 var(--f-disp);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);background:color-mix(in srgb,var(--surface) 86%,transparent);padding:6px 9px;border-radius:6px}
+.stage-top .seg{pointer-events:auto}
+@media (max-width:560px){.stage-top{position:static;padding:12px 14px 4px;flex-wrap:wrap;align-items:center;background:var(--rock)}.stage-top .tag{background:transparent;padding:0}}
+
+.results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+@media (max-width:520px){.results{grid-template-columns:minmax(0,1fr)}}
+.res{padding:16px}
+.res-h{display:flex;align-items:center;gap:8px;font:600 13px/1 var(--f-disp);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.sw{width:18px;height:3px;border-radius:2px;flex:none}
+.res .big{font:500 44px/1.05 var(--f-mono);letter-spacing:-.03em;margin-top:12px;font-variant-numeric:tabular-nums}
+.res .big small{font-size:20px;color:var(--ink-3);letter-spacing:0;margin-left:2px}
+.chip{display:inline-flex;align-items:center;gap:6px;font:600 12.5px/1 var(--f-body);padding:6px 10px 6px 8px;border-radius:999px;margin-top:10px}
+.chip svg{width:14px;height:14px;flex:none}
+.chip.good{background:var(--good-bg);color:var(--good)}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.chip.mid{background:var(--mid-bg);color:var(--mid)}
+.meter{position:relative;height:30px;margin-top:14px}
+.meter .trk{position:absolute;left:0;right:0;top:12px;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.meter .ok{position:absolute;left:0;top:0;bottom:0;background:color-mix(in srgb,var(--good) 45%,transparent)}
+.meter .thr{position:absolute;top:6px;bottom:6px;width:2px;background:var(--ink);transform:translateX(-1px)}
+.meter .thr-l{position:absolute;top:-9px;transform:translateX(-50%);font:11px var(--f-mono);color:var(--ink-2)}
+.meter .mk{position:absolute;top:8px;width:14px;height:14px;border-radius:50%;transform:translateX(-50%);border:2px solid var(--surface);transition:left .25s ease}
+.meter .ends{position:absolute;left:0;right:0;bottom:-14px;display:flex;justify-content:space-between;font:10.5px var(--f-mono);color:var(--ink-3)}
+.note{margin-top:14px;padding:12px 14px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);font-size:13.5px;color:var(--ink-2);display:flex;gap:10px;align-items:flex-start}
+.note svg{flex:none;margin-top:2px;width:16px;height:16px}
+.note.warn{background:var(--mid-bg);border-color:transparent;color:var(--mid)}
+.note.ok{background:var(--good-bg);border-color:transparent;color:var(--good)}
+
+/* tables */
+.tw{overflow-x:auto;border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font:600 12px/1.2 var(--f-disp);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);background:var(--surface-2);position:sticky;top:0;z-index:1}
+td.n,th.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+tbody tr:hover td{background:color-mix(in srgb,var(--surface-2) 70%,transparent)}
+th button{all:unset;cursor:pointer;display:inline-flex;gap:4px;align-items:center}
+th button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.rbar{position:relative;display:block;width:96px;height:6px;border-radius:3px;background:var(--line);margin-top:6px}
+.rbar i{position:absolute;top:0;bottom:0;border-radius:3px;background:var(--ink-3)}
+.rbar b{position:absolute;top:-3px;width:2px;height:12px;background:var(--ink);transform:translateX(-1px)}
+.rng-cell .v{font:500 14px var(--f-mono)}
+.rng-cell .s{display:block;font:12px var(--f-mono);color:var(--ink-3)}
+.pill{display:inline-flex;align-items:center;gap:6px;font:600 12px/1 var(--f-body);padding:5px 9px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)}
+.pill.good{background:var(--good-bg);color:var(--good);border-color:transparent}
+.pill.mid{background:var(--mid-bg);color:var(--mid);border-color:transparent}
+.pill.bad{background:var(--bad-bg);color:var(--bad);border-color:transparent}
+.toolbar{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:14px}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13.5px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend .sw{height:3px;width:20px}
+
+/* charts */
+.chart{position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{font-family:var(--f-mono);font-size:11.5px;fill:var(--ink-3)}
+.chart .ax text.t{fill:var(--ink-2);font-family:var(--f-body);font-size:12.5px}
+.tip{position:absolute;z-index:5;pointer-events:none;background:var(--surface);border:1px solid var(--line-2);border-radius:10px;padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.14);font-size:13px;min-width:150px;opacity:0;transition:opacity .08s}
+.tip.on{opacity:1}
+.tip .h{font:600 12px var(--f-mono);color:var(--ink-2);margin-bottom:6px}
+.tip .r{display:flex;justify-content:space-between;gap:14px;align-items:center}
+.tip .r span{display:inline-flex;align-items:center;gap:7px}
+.tip .r b{font:500 13px var(--f-mono)}
+.grid2{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:20px}
+@media (max-width:920px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.stat{padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.stat .k{font:600 12px/1 var(--f-disp);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.stat .v{font:500 26px/1.1 var(--f-mono);margin-top:8px;font-variant-numeric:tabular-nums}
+.stat .s{font-size:12.5px;color:var(--ink-3);margin-top:4px}
+.cols3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+@media (max-width:920px){.cols3{grid-template-columns:minmax(0,1fr)}}
+.eq{font:500 13.5px/1.7 var(--f-mono);color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;overflow-x:auto}
+dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:14px}
+dt{font:600 15px var(--f-disp)}
+dd{margin:0;color:var(--ink-2)}
+ul.tight{margin:10px 0 0;padding-left:18px;color:var(--ink-2);display:flex;flex-direction:column;gap:6px;font-size:14px}
+footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--ink-3);font-size:13px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+
+<body>
+<header class="top"><div class="wrap">
+  <div class="brand"><b>Prediksi Overbreak</b><span>MRA · ANFIS · n = 45</span></div>
+  <nav class="nav" aria-label="Bagian halaman">
+    <a href="#kalkulator">Kalkulator</a><a href="#rekomendasi">Rekomendasi</a><a href="#sensitivitas">Sensitivitas</a><a href="#data">Data</a><a href="#metode">Metode</a>
+  </nav>
+</div></header>
+
+<main class="wrap">
+<section id="kalkulator" class="hero">
+  <span class="eyebrow">Peledakan terowongan · target overbreak &lt; 10%</span>
+  <h1 style="margin-top:12px;max-width:20ch">Atur parameter peledakan, lihat overbreak-nya.</h1>
+  <p class="lead">Enam parameter masuk ke dua model, regresi linear berganda dan ANFIS. Hasilnya muncul langsung, lengkap dengan gambar penampang yang membesar mengikuti prediksi.</p>
+
+  <div class="calc">
+    <div class="card" id="panelParam">
+      <div class="panel-h">
+        <h3>Parameter</h3>
+        <div class="presets">
+          <button class="btn" id="pMean" type="button">Rata-rata data</button>
+          <button class="btn solid" id="pRec" type="button">Titik rekomendasi</button>
+        </div>
+      </div>
+      <div id="sliders"></div>
+    </div>
+
+    <div>
+      <div class="stage">
+        <div class="stage-top">
+          <span class="tag">Penampang terowongan</span>
+          <div class="seg" role="group" aria-label="Model untuk gambar">
+            <button type="button" id="tgReg" aria-pressed="true"><span class="dot" style="background:var(--reg)"></span>MRA</button>
+            <button type="button" id="tgAnf" aria-pressed="false"><span class="dot" style="background:var(--anf)"></span>ANFIS</button>
+          </div>
+        </div>
+        <svg id="tunnel" viewBox="0 0 400 300" role="img" aria-label="Penampang terowongan rencana dan hasil peledakan"></svg>
+      </div>
+      <div class="results" id="results"></div>
+      <div id="support"></div>
+    </div>
+  </div>
+</section>
+
+<section id="rekomendasi">
+  <div class="sec-h">
+    <span class="eyebrow">Rentang parameter</span>
+    <h2>Dari luas penampang dan kedalaman bor ke angka PF, W, dan ppf</h2>
+    <p>A dan Drill biasanya sudah ditentukan lapangan. Pilih kedalaman bor, lalu baca baris luas penampang untuk melihat PF, W, dan ppf yang menjaga prediksi di bawah 10%. RQD dipatok 40%.</p>
+  </div>
+  <div class="card flat">
+    <div class="toolbar" style="padding:16px 16px 0">
+      <div class="seg" role="group" aria-label="Kedalaman pengeboran" id="drillSeg"></div>
+      <div class="legend"><span><span class="pill good">Target 8%</span> prediksi MRA ≤ 8%</span><span><span class="pill mid">Batas 10%</span> ≤ 10%</span><span><b style="color:var(--bad)">!</b> ANFIS di atas 10%</span></div>
+    </div>
+    <div class="tw"><table id="recTable"></table></div>
+  </div>
+  <p style="margin-top:12px;color:var(--ink-3);font-size:13.5px;max-width:80ch">Batang kecil di bawah angka menunjukkan posisi rentang di dalam rentang data, garis tegak adalah titik acuan. Rentang diambil dari kombinasi yang berada dalam jangkauan data pelatihan, lalu dicek silang dengan ANFIS.</p>
+</section>
+
+<section id="sensitivitas">
+  <div class="sec-h">
+    <span class="eyebrow">Sensitivitas</span>
+    <h2>Seberapa kuat tiap parameter menggeser overbreak</h2>
+    <p>Satu parameter digeser sepanjang rentang datanya, parameter lain mengikuti nilai di kalkulator. Garis regresi lurus, kurva ANFIS bisa melengkung dan mendatar di ujung rentang.</p>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="toolbar">
+        <div class="seg" role="tablist" aria-label="Parameter yang digeser" id="sensTabs"></div>
+        <div class="legend"><span><i class="sw" style="background:var(--reg)"></i>Regresi linear</span><span><i class="sw" style="background:var(--anf)"></i>ANFIS</span></div>
+      </div>
+      <div class="chart" id="sensChart"></div>
+      <p style="font-size:13px;color:var(--ink-3);margin-top:8px">Pita abu-abu: persentil 10–90 data. Titik: nilai di kalkulator. Garis putus-putus: batas 10%.</p>
+    </div>
+    <div class="card">
+      <h3>Perubahan overbreak, P10 ke P90</h3>
+      <p style="color:var(--ink-3);font-size:13.5px;margin:4px 0 12px">Parameter lain di rata-rata data. Poin persen.</p>
+      <div class="chart" id="tornado"></div>
+    </div>
+  </div>
+</section>
+
+<section id="data">
+  <div class="sec-h">
+    <span class="eyebrow">Data dan akurasi</span>
+    <h2>45 peledakan: aktual melawan prediksi</h2>
+    <p>Titik yang dekat garis diagonal berarti prediksi mendekati kenyataan. Garis putus-putus menandai batas 10%.</p>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="legend" style="margin-bottom:10px"><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="var(--reg)"/></svg>Regresi linear</span><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="3" y="3" width="8" height="8" transform="rotate(45 7 7)" fill="var(--anf)"/></svg>ANFIS</span></div>
+      <div class="chart" id="scatter"></div>
+    </div>
+    <div class="card" style="display:flex;flex-direction:column;gap:14px">
+      <h3>Ukuran kecocokan model</h3>
+      <div class="tw"><table id="metrics"></table></div>
+      <p style="font-size:13.5px;color:var(--ink-3)">Dihitung pada 45 data pelatihan. RMSE dan MAE dalam poin persen overbreak.</p>
+    </div>
+  </div>
+  <div class="card flat" style="margin-top:20px">
+    <div class="toolbar" style="padding:16px 16px 0">
+      <h3>Tabel data</h3>
+      <label style="display:inline-flex;gap:8px;align-items:center;font-size:14px;cursor:pointer"><input type="checkbox" id="onlyLow"> Hanya aktual &lt; 10%</label>
+    </div>
+    <div class="tw" style="max-height:480px;overflow:auto"><table id="dataTable"></table></div>
+  </div>
+</section>
+
+<section id="metode">
+  <div class="sec-h">
+    <span class="eyebrow">Metode</span>
+    <h2>Cara kedua model bekerja</h2>
+  </div>
+  <div class="cols3">
+    <div class="card">
+      <h3>Regresi linear berganda</h3>
+      <p style="color:var(--ink-2);margin:8px 0 12px;font-size:14px">Satu persamaan lurus. Setiap parameter punya koefisien tetap.</p>
+      <div class="eq" id="eq"></div>
+    </div>
+    <div class="card">
+      <h3>ANFIS</h3>
+      <p style="color:var(--ink-2);margin:8px 0 0;font-size:14px">Takagi-Sugeno orde 1 dengan 2 aturan. Pusat dan lebar fungsi keanggotaan Gaussian diawali dari klaster K-Means. Parameter konsekuen dihitung dengan least squares berpenalti L2, parameter premis dilatih dengan Adam selama 100 epoch.</p>
+      <ul class="tight"><li>Input diskalakan ke 0–1 (Min-Max).</li><li>Kurva bisa melengkung dan mendatar di ujung rentang.</li><li>Dihitung langsung di halaman ini.</li></ul>
+    </div>
+    <div class="card">
+      <h3>Rentang data pelatihan</h3>
+      <div class="tw" style="margin-top:8px"><table id="ranges"></table></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:20px">
+    <h3>Arti parameter</h3>
+    <dl style="margin-top:12px">
+      <dt>PF</dt><dd>Powder factor, kg bahan peledak per m³ batuan.</dd>
+      <dt>W</dt><dd>Muatan maksimum per delay, kg.</dd>
+      <dt>A</dt><dd>Luas penampang terowongan, m².</dd>
+      <dt>Drill</dt><dd>Kedalaman pengeboran, m.</dd>
+      <dt>ppf</dt><dd>Perimeter powder factor, muatan pada lubang perimeter.</dd>
+      <dt>RQD</dt><dd>Rock Quality Designation, %, kualitas massa batuan.</dd>
+    </dl>
+    <ul class="tight" style="margin-top:16px"><li>Prediksi paling andal di dalam rentang data. Penanda jangkauan di kalkulator memberi tahu kalau titik keluar dari rentang itu.</li><li>Koefisien W bertanda negatif karena W bergerak bersama Drill pada data. Baca keduanya sebagai satu kelompok.</li></ul>
+  </div>
+</section>
+
+<footer>Semua perhitungan berjalan di browser dari koefisien model yang dilatih pada 45 data peledakan. Hasil adalah perkiraan statistik untuk membantu perencanaan.</footer>
+</main>
+
+<script>
+const M={"names":["PF","W","A","Drill","ppf","RQD"],"b":[-65.60869833616906,4.644013145411914,-1.506226631833391,2.426296306718445,14.916670081417198,4.19371117972232,-0.008840977012715441],"smin":[1.4978659815251447,9.444444444444445,18.421597,1.5,0.225390625,20.0],"sscale":[0.273984144248662,0.06376021798365122,0.10048127516365132,1.0,0.7661764999301661,0.025],"sadd":[-0.410391529147349,-0.6021798365122616,-1.8510255571108936,-1.5,-0.17268900017957262,-0.5],"centers":[[0.3963593150907778,0.2615792311462003,0.7166157950127988,0.3444754194376356,0.16890997692250465,0.4420980762630975],[0.5223677356795613,0.7289086589864322,0.3205844482547288,0.9034364001055344,0.02914061039156783,0.732616236466513]],"sigmas":[[0.7149404857938924,0.7312522513889261,0.5291156041077071,0.7726543238953363,0.7431768025828572,0.7653397687532254],[0.5350491991102997,0.5465212639093439,0.5443531691899947,0.7843343783883405,0.5562354902155968,0.5476098772879401]],"cons":[[-0.5873190037707353,0.19070628210862867,9.328437198370109,7.789777040044203,2.7473307487449627,3.99925568464103,9.312541514856482],[-1.836028069468366,-1.1656640127103999,2.487909398271766,2.0910545254722566,-0.04202741830240409,0.7270880005109659,0.5031547469483201]],"data":[[4.390496366688636,16.666666666666668,22.776468,1.5,0.5481770833333334,40.0,4.0],[4.42754355792132,17.555555555555557,23.790468000000004,1.5,0.7463020833333334,40.0,10.0],[4.010946135882859,16.88888888888889,25.264197,1.5,0.7463020833333334,40.0,16.0],[3.9510727880996566,15.88888888888889,24.128467999999998,1.5,0.5811979166666668,30.0,10.0],[3.251288865094271,18.0,24.913197,2.0,0.5597265625000001,30.0,14.0],[3.4722344697843384,14.88888888888889,25.72790925,1.5,1.5305729166666668,22.0,20.0],[2.8556616381374575,18.22222222222222,22.971909249999996,2.5,0.33881250000000007,40.0,13.0],[2.984857915955376,16.555555555555557,24.959311999999997,2.0,0.5597265625000001,30.0,21.0],[3.0609818091139696,21.22222222222222,24.959311999999997,2.5,0.43640625000000005,30.0,15.0],[3.2966604388237695,14.0,25.48033125,1.5,0.4659375,20.0,13.0],[3.1598942609097604,12.923076923076923,26.583168,1.5,0.7253645833333333,50.0,19.0],[2.501972934264753,11.88888888888889,21.383125,2.0,0.34921875,28.0,14.0],[2.166178441636024,11.555555555555555,24.00540925,2.0,0.225390625,30.0,15.0],[1.4978659815251447,9.444444444444445,28.3737,2.0,0.34921875,40.0,28.0],[3.155605916761094,17.88888888888889,20.408125,2.5,0.27937500000000004,50.0,8.0],[2.926882207664064,16.88888888888889,25.966197,2.0,0.34921875,40.0,16.0],[2.5909524114850733,14.555555555555555,20.224223250000005,2.5,0.27937500000000004,52.0,12.0],[4.290499056130147,15.666666666666666,21.908873249999996,1.5,0.506875,30.0,9.0],[2.850306797114371,14.222222222222221,22.453723250000003,2.0,0.38015625000000003,35.0,12.0],[3.6056992926363995,19.885714285714286,24.128467999999998,2.0,0.34597656250000003,55.0,13.0],[2.9885617778887608,13.6,25.597596999999997,2.0,0.41113281250000006,25.0,19.0],[3.860784169687139,18.97142857142857,21.498223250000002,2.0,0.437109375,46.0,4.0],[3.0654199862440303,16.666666666666668,24.466468,2.0,0.41113281250000006,52.0,18.0],[3.0016700905071314,13.777777777777779,20.655168,2.0,0.23585937500000004,50.0,10.0],[3.637035377551686,14.88888888888889,18.421597,2.0,0.225390625,40.0,4.0],[4.04467746601741,21.77777777777778,24.22937325,2.0,0.41113281250000006,42.0,12.0],[2.757706788342469,11.666666666666666,25.383409249999996,1.5,1.0022395833333333,25.0,16.0],[2.653433779857558,12.585365853658537,24.308125,2.0,0.48542968750000004,45.0,21.0],[3.482765271539966,17.555555555555557,22.683125,2.0,0.23585937500000004,35.0,9.0],[5.147712226249518,18.444444444444443,21.498223250000002,1.5,0.465625,25.0,10.0],[2.9581422953945933,16.025641025641026,28.17083325,1.5,0.5859375,45.0,15.0],[2.806342434850331,17.82051282051282,24.765331250000003,2.0,0.48867187500000003,55.0,11.0],[2.7594814625705615,19.487179487179485,22.033125,2.5,0.42750000000000005,56.0,10.0],[2.535828161379724,19.23076923076923,23.660909249999996,2.5,0.42187500000000006,55.0,11.0],[2.776240241949336,18.846153846153847,21.179723250000006,2.5,0.4134375,60.0,8.0],[2.856073474793424,19.871794871794872,21.708125000000003,2.5,0.43593750000000003,60.0,10.0],[2.2287928592590545,17.435897435897438,24.40783125,2.5,0.38250000000000006,55.0,17.0],[2.6772377832350247,19.871794871794872,23.158197,2.5,0.43593750000000003,45.0,9.0],[2.2930910808140634,17.564102564102562,23.89787325,2.5,0.38531250000000006,35.0,13.0],[3.0768625484795,23.461538461538463,23.790468000000004,2.5,0.5146875000000001,35.0,15.0],[3.1366470658344676,22.692307692307693,22.571873249999996,2.5,0.49781250000000005,33.0,11.0],[3.052090463961352,25.128205128205128,25.687312,2.5,0.5512500000000001,35.0,12.0],[3.1508939625140355,21.923076923076927,21.708125000000003,2.5,0.4809375,35.0,9.0],[2.985561404640545,21.28205128205128,22.240373249999998,2.5,0.46687500000000004,35.0,5.0],[2.7872446146201733,19.102564102564102,21.383125,2.5,0.41906250000000006,40.0,8.0]],"pred_reg":[9.259769901343645,11.384092909738555,14.029263323140015,11.897832843233786,14.74049078470486,19.11317879532264,14.301811911552804,15.790731299169579,16.056359311946025,14.588889722531405,19.074377696103156,11.035248388789611,15.803347139548293,26.909164403312488,9.638658892946694,16.491198423768623,11.573273940437119,8.11176653229056,11.803831299731982,10.524649127451625,21.229382724903417,7.166388506677663,13.984057756083587,8.074616448992117,3.9768778358049133,10.34639834493882,17.57024035941977,18.207431813272763,9.671678530340216,6.783568617087411,16.775908537198433,12.066728697690678,9.902542960750083,13.184844312421646,8.780957358999302,8.983273830278847,16.109578743735426,11.80367752107938,15.166379692389071,10.205314105457347,8.631831197143114,12.335532656223137,7.672469824152671,9.102611043991999,9.139771933904626],"pred_anf":[10.346974351798762,11.953176864260657,14.007527303038783,12.43427341440144,14.518221904832007,17.631962336017846,11.32605543090096,15.236115922470812,13.701612086985879,14.223873489783838,17.300684221978642,12.389099298832958,15.58059975183166,22.332559080251478,7.854623932356451,15.433366561418897,9.522587472297834,9.644613698593302,12.325918822252401,11.352968052169182,16.769938381916848,8.528661429901568,13.525149478040968,9.669644129369875,6.390136074238507,10.969192325059137,16.319996488376585,15.646835285714037,10.594866845622187,8.502917104787988,17.764289643453292,13.974527889222749,9.721690270626613,11.996992121737414,9.054704854744763,9.252322719313549,14.05792556752114,11.114788429923959,13.91011497619018,11.235839040940235,10.018161575670423,13.457135432525039,8.98569147975074,9.897766639910916,9.353309064840586],"met_reg":{"R2":0.7917789904253721,"RMSE":2.2254151179024615,"MAE":1.7880413961180994,"MAPE":18.248098137470016},"met_anf":{"R2":0.7113629213473545,"RMSE":2.6201419484896373,"MAE":2.0431216251335673,"MAPE":21.126003955203235},"mean":[3.1370644016402305,17.21082118122769,23.544691505555562,2.066666666666667,0.4784883680555556,39.91111111111111],"mn":[1.4978659815251447,9.444444444444445,18.421597,1.5,0.225390625,20.0],"mx":[5.147712226249518,25.128205128205128,28.3737,2.5,1.5305729166666668,60.0],"p10":[2.5155150251107417,12.720450281425892,21.261083950000003,1.5,0.27937500000000004,26.200000000000003],"p90":[4.03118493396359,21.57948717948718,25.71167035,2.5,0.6695937500000002,55.0],"mu":[3.1370644016402296,17.210821181227686,23.544691505555555,2.066666666666667,0.4784883680555555],"Si":[[25.306727669489145,-3.934395773942996,3.6854943980124584,50.63208333143291,5.495775952891621],[-3.9343957739429958,0.7430818575730093,-0.5569013618631646,-8.606232227260115,-1.4114264472206308],[3.6854943980124575,-0.5569013618631645,0.8295493539592673,7.608276986462424,-0.13987622667350066],[50.63208333143291,-8.606232227260115,7.608276986462425,114.14054556361863,20.299938760931983],[5.495775952891626,-1.4114264472206326,-0.13987622667349897,20.299938760932008,33.16909803759707]],"thr":3.35306151019939,"grid":[{"A":18.5,"Drill":1.5,"tier":null},{"A":18.5,"Drill":2.0,"tier":1,"n":1947,"PF":3.7707188652524914,"W":15.103243726120777,"ppf":0.35426305062726343,"PF_lo":3.8091791290122368,"PF_hi":4.248415760075669,"W_lo":15.017919454983796,"W_hi":16.546309043823452,"ppf_lo":0.2953985174389257,"ppf_hi":0.5271329831651335,"frac_area":0.12196955459500095,"anfis":6.540243384436415,"anfis_share":1.0},{"A":18.5,"Drill":2.5,"tier":1,"n":9082,"PF":3.2496823291140164,"W":18.172214723043957,"ppf":0.2595855600097522,"PF_lo":2.8056410269390315,"PF_hi":3.671978397143205,"W_lo":16.002783998648646,"W_hi":19.4098603692791,"ppf_lo":0.278042134549015,"ppf_hi":0.5123476653066464,"frac_area":0.40795975204384155,"anfis":6.012783578088239,"anfis_share":1.0},{"A":19.0,"Drill":1.5,"tier":null},{"A":19.0,"Drill":2.0,"tier":1,"n":5177,"PF":3.786509238948025,"W":15.940743230791409,"ppf":0.3497335379929196,"PF_lo":3.655929253937936,"PF_hi":4.283112855271896,"W_lo":15.08433931188803,"W_hi":17.183584711290877,"ppf_lo":0.28848990091707166,"ppf_hi":0.5250186444305116,"frac_area":0.25317879499217527,"anfis":6.761214176847373,"anfis_share":1.0},{"A":19.0,"Drill":2.5,"tier":1,"n":11460,"PF":3.2997571291308634,"W":19.115407068700968,"ppf":0.2612249954669708,"PF_lo":2.8203281736679635,"PF_hi":3.81188598195125,"W_lo":16.876738006334847,"W_hi":20.54114766230681,"ppf_lo":0.27902141598655616,"ppf_hi":0.519936918197205,"frac_area":0.46857750337326737,"anfis":6.174938714186673,"anfis_share":1.0},{"A":19.5,"Drill":1.5,"tier":null},{"A":19.5,"Drill":2.0,"tier":1,"n":8601,"PF":3.817976536616614,"W":16.755954917683738,"ppf":0.3725865858896802,"PF_lo":3.464884405652966,"PF_hi":4.292922214215335,"W_lo":15.180440483202034,"W_hi":17.77942700994354,"ppf_lo":0.285658563672732,"ppf_hi":0.5227725118788682,"frac_area":0.3520815424290802,"anfis":7.049219894145185,"anfis_share":1.0},{"A":19.5,"Drill":2.5,"tier":1,"n":11884,"PF":3.2460533632055224,"W":19.36708976857436,"ppf":0.27058458591792456,"PF_lo":2.8253622935151124,"PF_hi":3.8301013411768383,"W_lo":17.722079259099157,"W_hi":21.20596633439942,"ppf_lo":0.2790247257638436,"ppf_hi":0.5182764302802313,"frac_area":0.470560285092061,"anfis":6.630978897754987,"anfis_share":1.0},{"A":20.0,"Drill":1.5,"tier":null},{"A":20.0,"Drill":2.0,"tier":1,"n":11376,"PF":3.7515064415358217,"W":16.843256116380974,"ppf":0.38496365104168995,"PF_lo":3.270484711598019,"PF_hi":4.278130771462553,"W_lo":15.272083968767951,"W_hi":18.381170923502996,"ppf_lo":0.28322484158460076,"ppf_hi":0.5204660805530834,"frac_area":0.40293273828498566,"anfis":7.629211288962976,"anfis_share":1.0},{"A":20.0,"Drill":2.5,"tier":1,"n":10802,"PF":3.13372808244838,"W":19.198442152771374,"ppf":0.27718382460415814,"PF_lo":2.810917559078607,"PF_hi":3.7754365873004283,"W_lo":18.471547755724796,"W_hi":21.50560273463009,"ppf_lo":0.2793313912448637,"ppf_hi":0.516835632833282,"frac_area":0.42504131581018334,"anfis":7.270687979279919,"anfis_share":1.0},{"A":20.5,"Drill":1.5,"tier":1,"n":246,"PF":4.3707036432139255,"W":14.95153692253775,"ppf":0.5087350986114549,"PF_lo":4.227662882081648,"PF_hi":4.3873142634543285,"W_lo":14.945943223185505,"W_hi":15.414492282210318,"ppf_lo":0.3906678652921456,"ppf_hi":0.5390616399198915,"frac_area":0.10323122114981116,"anfis":8.104947015335796,"anfis_share":1.0},{"A":20.5,"Drill":2.0,"tier":1,"n":13140,"PF":3.6862709267169,"W":16.896151634618025,"ppf":0.408819207108973,"PF_lo":3.1167417401231763,"PF_hi":4.258851150097677,"W_lo":15.455297877005444,"W_hi":19.132534562584016,"ppf_lo":0.28124750526706976,"ppf_hi":0.5204430154961285,"frac_area":0.42473413711736757,"anfis":8.262069821861338,"anfis_share":1.0},{"A":20.5,"Drill":2.5,"tier":1,"n":8608,"PF":3.061842192497927,"W":19.243072648805835,"ppf":0.3123737346842018,"PF_lo":2.7886919665082033,"PF_hi":3.5956890375505397,"W_lo":19.132135879275012,"W_hi":21.60794446869267,"ppf_lo":0.27715100288234396,"ppf_hi":0.5149951571176713,"frac_area":0.3477558275764554,"anfis":7.884080239487055,"anfis_share":1.0},{"A":21.0,"Drill":1.5,"tier":1,"n":1483,"PF":4.27782570645941,"W":14.915391691753186,"ppf":0.5419270557010384,"PF_lo":4.0833162515677515,"PF_hi":4.374502567131876,"W_lo":14.976703370796187,"W_hi":15.863724523605862,"ppf_lo":0.30027729112397084,"ppf_hi":0.5300977086893386,"frac_area":0.36789878442073926,"anfis":8.79819550683151,"anfis_share":1.0},{"A":21.0,"Drill":2.0,"tier":1,"n":14756,"PF":3.6109245440293174,"W":16.947549124587297,"ppf":0.42186370413855573,"PF_lo":3.0149447486766574,"PF_hi":4.243341760603064,"W_lo":15.753104306545007,"W_hi":19.823201625775724,"ppf_lo":0.2799763979155498,"ppf_hi":0.5196040232740182,"frac_area":0.43646474207288216,"anfis":8.893948079138205,"anfis_share":0.9646666666666667},{"A":21.0,"Drill":2.5,"tier":1,"n":6194,"PF":3.053572831566534,"W":19.831304631103468,"ppf":0.3237153283648023,"PF_lo":2.764346213928389,"PF_hi":3.3791176408158816,"W_lo":19.793024842789297,"W_hi":21.700490921269733,"ppf_lo":0.27471244574905557,"ppf_hi":0.5118751179881456,"frac_area":0.2644748078565329,"anfis":8.25795244224036,"anfis_share":1.0},{"A":21.5,"Drill":1.5,"tier":1,"n":3520,"PF":4.207523596103671,"W":14.927251966528978,"ppf":0.5454924466704711,"PF_lo":3.91724348601898,"PF_hi":4.361583500176278,"W_lo":15.024131218616779,"W_hi":16.45856226299658,"ppf_lo":0.28954981413525005,"ppf_hi":0.5268277919585882,"frac_area":0.6398836575168151,"anfis":9.400747864064996,"anfis_share":1.0},{"A":21.5,"Drill":2.0,"tier":1,"n":14739,"PF":3.6505991572190246,"W":17.800024565411654,"ppf":0.43154201675417514,"PF_lo":2.975211685980431,"PF_hi":4.2277913840375225,"W_lo":16.275739438639114,"W_hi":20.583448572197153,"ppf_lo":0.2793232860728735,"ppf_hi":0.5187136455698902,"frac_area":0.4141913727694253,"anfis":9.18120460922444,"anfis_share":0.8693333333333333},{"A":21.5,"Drill":2.5,"tier":1,"n":3617,"PF":3.093180251724905,"W":20.71790345515436,"ppf":0.3170831266205768,"PF_lo":2.741111616257024,"PF_hi":3.1867955865357454,"W_lo":20.387025515622888,"W_hi":21.780022623463847,"ppf_lo":0.273446069335947,"ppf_hi":0.5032631248936839,"frac_area":0.16813089759680194,"anfis":8.487249061933689,"anfis_share":1.0},{"A":22.0,"Drill":1.5,"tier":1,"n":5379,"PF":4.226948287008257,"W":15.775465349247305,"ppf":0.5443692460156866,"PF_lo":3.844097519074845,"PF_hi":4.342358811986856,"W_lo":15.139674296624717,"W_hi":17.025395617608865,"ppf_lo":0.28694952454709133,"ppf_hi":0.5240035682938318,"frac_area":0.7243468893078373,"anfis":9.712237751792822,"anfis_share":0.984},{"A":22.0,"Drill":2.0,"tier":1,"n":14042,"PF":3.705158728389499,"W":18.71867097558235,"ppf":0.41386952037409525,"PF_lo":3.000533332237522,"PF_hi":4.198178235708529,"W_lo":17.09454796226623,"W_hi":21.19641149855273,"ppf_lo":0.27987201586610516,"ppf_hi":0.5173107487186768,"frac_area":0.3730308423876949,"anfis":9.391874527953993,"anfis_share":0.8006666666666666},{"A":22.0,"Drill":2.5,"tier":1,"n":1472,"PF":3.1219895872236845,"W":21.74009132112745,"ppf":0.3630528084550614,"PF_lo":2.7226872205718444,"PF_hi":3.0359073608904725,"W_lo":20.898956651023795,"W_hi":21.834848464678597,"ppf_lo":0.2668541511579013,"ppf_hi":0.4925093087028657,"frac_area":0.07557244070233084,"anfis":8.805914040869602,"anfis_share":1.0},{"A":22.5,"Drill":1.5,"tier":1,"n":6219,"PF":4.243893158194817,"W":16.589724903667317,"ppf":0.5357404949572131,"PF_lo":3.7686418247297384,"PF_hi":4.336540254167463,"W_lo":15.33776280480687,"W_hi":17.82370301151969,"ppf_lo":0.28910261440442864,"ppf_hi":0.5239941766311429,"frac_area":0.6732705423838908,"anfis":10.025862995844564,"anfis_share":0.7493333333333333},{"A":22.5,"Drill":2.0,"tier":1,"n":11480,"PF":3.7937731107680595,"W":19.875995168640376,"ppf":0.43959330363237537,"PF_lo":3.0262200131515504,"PF_hi":4.090701335954942,"W_lo":17.87861404404041,"W_hi":21.49463707834193,"ppf_lo":0.27739272536383,"ppf_hi":0.5149699889080839,"frac_area":0.29877160108265666,"anfis":9.640587067798506,"anfis_share":0.656},{"A":22.5,"Drill":2.5,"tier":1,"n":260,"PF":2.959536074843701,"W":21.87112945062613,"ppf":0.3025507684534784,"PF_lo":2.7120645690004155,"PF_hi":2.882933521072357,"W_lo":21.389431537864176,"W_hi":21.862896567449425,"ppf_lo":0.26088356370382615,"ppf_hi":0.4181552805307719,"frac_area":0.014817347694762638,"anfis":9.365628530530751,"anfis_share":0.9846153846153847},{"A":23.0,"Drill":1.5,"tier":1,"n":5675,"PF":4.296353667142883,"W":17.54434731611429,"ppf":0.5346058720771114,"PF_lo":3.7159438247882965,"PF_hi":4.338549879419412,"W_lo":15.728643202842678,"W_hi":18.563354123180773,"ppf_lo":0.2875793636844322,"ppf_hi":0.522451616623451,"frac_area":0.5139467487773954,"anfis":10.326812921356776,"anfis_share":0.37466666666666665},{"A":23.0,"Drill":2.0,"tier":1,"n":7651,"PF":3.7713684352502623,"W":20.7269974983326,"ppf":0.4778653929377486,"PF_lo":3.0663269780171833,"PF_hi":3.921926819330726,"W_lo":18.679974314396812,"W_hi":21.655032126192552,"ppf_lo":0.27563801746506944,"ppf_hi":0.5122655862082858,"frac_area":0.19855708094360677,"anfis":10.103116661214278,"anfis_share":0.41733333333333333},{"A":23.0,"Drill":2.5,"tier":2,"n":936,"PF":3.0189904005259707,"W":21.760729029485248,"ppf":0.3859267692513263,"PF_lo":2.7173090499687627,"PF_hi":2.9771811631441754,"W_lo":21.113680819336242,"W_hi":21.845159400243976,"ppf_lo":0.26803078829893484,"ppf_hi":0.4855871315458541,"frac_area":0.06139717940308298,"anfis":10.084631945332509,"anfis_share":0.09935897435897435},{"A":23.5,"Drill":1.5,"tier":1,"n":3961,"PF":4.391247067359941,"W":18.707427773332427,"ppf":0.5465486211760582,"PF_lo":3.7635581782540175,"PF_hi":4.347788165095718,"W_lo":16.5927361239591,"W_hi":19.18861034427036,"ppf_lo":0.29413883485406234,"ppf_hi":0.5242430345759498,"frac_area":0.31171795073581493,"anfis":10.622387205809288,"anfis_share":0.03},{"A":23.5,"Drill":2.0,"tier":1,"n":3942,"PF":3.815860413011148,"W":21.662158470122822,"ppf":0.4792245900602532,"PF_lo":3.1012928663964128,"PF_hi":3.7434986871533664,"W_lo":19.488042863004004,"W_hi":21.730074252053267,"ppf_lo":0.27678905406922233,"ppf_hi":0.5113029987951523,"frac_area":0.10375595504435027,"anfis":10.438871042553865,"anfis_share":0.028},{"A":23.5,"Drill":2.5,"tier":2,"n":94,"PF":2.8179743676432136,"W":21.879197777731598,"ppf":0.34441941170592005,"PF_lo":2.7063143172122444,"PF_hi":2.8236890342887224,"W_lo":21.50263892726843,"W_hi":21.868363782833683,"ppf_lo":0.26003983589719165,"ppf_hi":0.382942140790369,"frac_area":0.007066606525334536,"anfis":10.757650490080163,"anfis_share":0.0},{"A":24.0,"Drill":1.5,"tier":1,"n":2177,"PF":4.384334505667908,"W":19.444500941139356,"ppf":0.5391956055207912,"PF_lo":3.878911439057717,"PF_hi":4.352387696172973,"W_lo":17.71946287674561,"W_hi":19.774733237689787,"ppf_lo":0.3125591250893567,"ppf_hi":0.5265080088755671,"frac_area":0.15061574650615747,"anfis":11.011536231273885,"anfis_share":0.0},{"A":24.0,"Drill":2.0,"tier":1,"n":1446,"PF":3.6237329953154163,"W":21.877793367167143,"ppf":0.47981300734845583,"PF_lo":3.1812827208864674,"PF_hi":3.600387031379328,"W_lo":20.416755199179782,"W_hi":21.78495239801164,"ppf_lo":0.2738394309076447,"ppf_hi":0.504257454754834,"frac_area":0.03890129401953135,"anfis":11.102483036207467,"anfis_share":0.0},{"A":24.0,"Drill":2.5,"tier":null},{"A":24.5,"Drill":1.5,"tier":1,"n":669,"PF":4.399198888211193,"W":20.26980282286895,"ppf":0.5336140926511777,"PF_lo":4.0252044105743945,"PF_hi":4.3716251829618304,"W_lo":19.018605662978363,"W_hi":20.361473296633847,"ppf_lo":0.36367900838127853,"ppf_hi":0.5316281981997475,"frac_area":0.041820341313996374,"anfis":11.395350635217659,"anfis_share":0.0},{"A":24.5,"Drill":2.0,"tier":1,"n":97,"PF":3.43222138871561,"W":21.86821985159888,"ppf":0.40061433781307937,"PF_lo":3.28013431249524,"PF_hi":3.456199677558491,"W_lo":21.41577774099189,"W_hi":21.86303627761877,"ppf_lo":0.27357225213613057,"ppf_hi":0.4556165586146988,"frac_area":0.002738797752491741,"anfis":11.636341372799285,"anfis_share":0.0},{"A":24.5,"Drill":2.5,"tier":null},{"A":25.0,"Drill":1.5,"tier":1,"n":35,"PF":4.36487496348545,"W":20.931842996401496,"ppf":0.5205652130848477,"PF_lo":4.2424106339443695,"PF_hi":4.3831487299902605,"W_lo":20.60173326799886,"W_hi":21.10923588362067,"ppf_lo":0.4853530208219126,"ppf_hi":0.5378741822565347,"frac_area":0.0020600353148911123,"anfis":11.816632979650246,"anfis_share":0.0},{"A":25.0,"Drill":2.0,"tier":2,"n":1617,"PF":3.493157680720668,"W":21.795819975709037,"ppf":0.49284444027008445,"PF_lo":3.0539810078062066,"PF_hi":3.4799053977106573,"W_lo":20.322106860523604,"W_hi":21.77882519621669,"ppf_lo":0.27880043990009157,"ppf_hi":0.5157241678433981,"frac_area":0.048069205386604835,"anfis":12.520677498819087,"anfis_share":0.0},{"A":25.0,"Drill":2.5,"tier":null},{"A":25.5,"Drill":1.5,"tier":2,"n":954,"PF":4.206247893241551,"W":19.974566755911262,"ppf":0.5398781327096676,"PF_lo":3.882034899615301,"PF_hi":4.3451807366335125,"W_lo":18.897640290698824,"W_hi":20.663469310310887,"ppf_lo":0.3910502871391229,"ppf_hi":0.5376862639384322,"frac_area":0.05457041528429241,"anfis":12.747891583516965,"anfis_share":0.0},{"A":25.5,"Drill":2.0,"tier":2,"n":117,"PF":3.3297531726672096,"W":21.82806716183098,"ppf":0.3972190162191317,"PF_lo":3.162823164975037,"PF_hi":3.3658122215265514,"W_lo":21.401847022126866,"W_hi":21.870632506518504,"ppf_lo":0.300778605421768,"ppf_hi":0.5103928096351801,"frac_area":0.0037437603993344427,"anfis":12.994253055055063,"anfis_share":0.0},{"A":25.5,"Drill":2.5,"tier":null},{"A":26.0,"Drill":1.5,"tier":2,"n":37,"PF":4.270291283133203,"W":20.984334979789708,"ppf":0.5431558491878012,"PF_lo":4.101659274242053,"PF_hi":4.366046337670747,"W_lo":20.469965043636666,"W_hi":21.343523501540098,"ppf_lo":0.5047380215422818,"ppf_hi":0.5447081255795295,"frac_area":0.0021356421356421356,"anfis":13.127123971274774,"anfis_share":0.0},{"A":26.0,"Drill":2.0,"tier":null},{"A":26.0,"Drill":2.5,"tier":null}]};
+(function(){
+const NM=M.names, UN=['kg/m³','kg','m²','m','','%'], DEC=[2,1,1,1,2,0], STEP=[0.01,0.1,0.1,0.1,0.01,1];
+const SUB=['Powder factor','Muatan maks. per delay','Luas penampang','Kedalaman pengeboran','Perimeter powder factor','Rock Quality Designation'];
+const $=s=>document.querySelector(s);
+const fmt=(v,d=1)=>v.toLocaleString('id-ID',{minimumFractionDigits:d,maximumFractionDigits:d});
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const NS='http://www.w3.org/2000/svg';
+
+/* ---------- model ---------- */
+const mra=P=>{let s=M.b[0];for(let i=0;i<6;i++)s+=M.b[i+1]*P[i];return s;};
+const anf=P=>{
+  const xs=P.map((v,i)=>v*M.sscale[i]+M.sadd[i]); const R=M.centers.length; const lw=[];
+  for(let r=0;r<R;r++){let s=0;for(let i=0;i<6;i++){const sg=Math.max(M.sigmas[r][i],1e-4),d=(xs[i]-M.centers[r][i])/sg;s+=d*d;}lw.push(-0.5*s);}
+  const mx=Math.max(...lw); const w=lw.map(v=>Math.exp(v-mx)); const ws=w.reduce((a,b)=>a+b,0)+1e-12; let y=0;
+  for(let r=0;r<R;r++){let f=M.cons[r][6];for(let i=0;i<6;i++)f+=M.cons[r][i]*xs[i];y+=(w[r]/ws)*f;}
+  return y;
+};
+const mahal=P=>{const d=[0,1,2,3,4].map(i=>P[i]-M.mu[i]);let s=0;for(let i=0;i<5;i++)for(let j=0;j<5;j++)s+=d[i]*M.Si[i][j]*d[j];return Math.sqrt(s);};
+
+/* ---------- state + sliders ---------- */
+const S=[3.14,17.2,23.5,2.0,0.48,40];
+const clamp=(v,i)=>Math.min(M.mx[i],Math.max(M.mn[i],v));
+const rows=[];
+function buildSliders(){
+  const host=$('#sliders');
+  NM.forEach((n,i)=>{
+    const frac=(M.mean[i]-M.mn[i])/(M.mx[i]-M.mn[i]);
+    const el=document.createElement('div'); el.className='prm';
+    el.innerHTML=`<div class="prm-h"><label for="n${i}"><b>${n}</b><span>${SUB[i]}</span></label>
+      <div class="nin"><input id="n${i}" type="number" inputmode="decimal" step="${STEP[i]}" min="${M.mn[i]}" max="${M.mx[i]}"><small>${UN[i]}</small></div></div>
+      <div class="rng"><input id="r${i}" type="range" min="${M.mn[i]}" max="${M.mx[i]}" step="${STEP[i]}" aria-label="${n}">
+      <i class="mean" style="left:calc(10px + (100% - 20px)*${frac})" title="Rata-rata data"></i></div>
+      <div class="prm-f"><span>${fmt(M.mn[i],DEC[i])}</span><span>rata-rata ${fmt(M.mean[i],DEC[i])}</span><span>${fmt(M.mx[i],DEC[i])}</span></div>`;
+    host.appendChild(el);
+    const r=el.querySelector('#r'+i), nn=el.querySelector('#n'+i);
+    r.addEventListener('input',()=>{S[i]=+r.value;sync(i);});
+    nn.addEventListener('change',()=>{const v=parseFloat(String(nn.value).replace(',','.'));S[i]=clamp(isNaN(v)?S[i]:v,i);sync(null);});
+    rows.push({r,nn});
+  });
+}
+function sync(skip){
+  rows.forEach((o,i)=>{
+    if(skip!==i){o.r.value=S[i];}
+    if(document.activeElement!==o.nn||skip!==i)o.nn.value=S[i].toFixed(DEC[i]);
+    const p=(S[i]-M.mn[i])/(M.mx[i]-M.mn[i])*100; o.r.style.setProperty('--p',p+'%');
+  });
+  render();
+}
+function setAll(arr){arr.forEach((v,i)=>S[i]=clamp(v,i));sync(null);}
+
+/* ---------- tunnel ---------- */
+let tunnelModel='reg';
+const noise=u=>0.5+0.25*Math.sin(2*Math.PI*3*u+1.1)+0.25*Math.cos(2*Math.PI*5*u+0.4);
+function profile(ob){
+  const k=(Math.sqrt(1+Math.max(ob,0)/100)-1)*105*1.9, R=105, cx=200, cy=150, fl=250, N=56, pts=[];
+  for(let i=0;i<=N;i++){const a=Math.PI-i*Math.PI/N;pts.push({x:cx+R*Math.cos(a),y:cy-R*Math.sin(a),dx:Math.cos(a),dy:-Math.sin(a)});}
+  for(let j=1;j<=10;j++)pts.push({x:cx+R,y:cy+(fl-cy)*j/10,dx:1,dy:0});
+  for(let j=10;j>=1;j--)pts.push({x:cx-R,y:cy+(fl-cy)*j/10,dx:-1,dy:0});
+  const n=pts.length;
+  const design=pts.map(p=>[p.x,p.y]);
+  const outer=pts.map((p,i)=>{const m=k*(0.55+0.9*noise(i/n));return [p.x+p.dx*m,Math.min(fl,p.y+p.dy*m)];});
+  return {outer,design};
+}
+function pathOf(a){return 'M'+a.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join('L')+'Z';}
+function drawTunnel(ob,areaA){
+  const {outer,design}=profile(ob), col=tunnelModel==='reg'?'var(--reg)':'var(--anf)', nmz=tunnelModel==='reg'?'MRA':'ANFIS';
+  $('#tunnel').innerHTML=`<defs><pattern id="hatch" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(40)"><line x1="0" y1="0" x2="0" y2="9" stroke="var(--rock-line)" stroke-width="1.4"/></pattern></defs>
+  <rect width="400" height="300" fill="var(--rock)"/><rect width="400" height="300" fill="url(#hatch)"/>
+  <path d="${pathOf(outer)}" fill="${col}" fill-opacity=".55" stroke="${col}" stroke-width="2.2" stroke-linejoin="round" style="transition:d .25s"/>
+  <path d="${pathOf(design)}" fill="var(--void)" stroke="var(--ink-2)" stroke-width="1.6" stroke-dasharray="5 4"/>
+  <text x="200" y="168" text-anchor="middle" style="font:500 38px var(--f-mono);fill:#fff;letter-spacing:-.03em">${fmt(ob,1)}%</text>
+  <text x="200" y="192" text-anchor="middle" style="font:600 12px var(--f-disp);letter-spacing:.14em;fill:#aab5c1">OVERBREAK ${nmz}</text>
+  <text x="200" y="222" text-anchor="middle" style="font:500 12px var(--f-mono);fill:#8f9ba9">A = ${fmt(areaA,1)} m²</text>
+  <rect x="0" y="258" width="400" height="42" fill="var(--rock)"/><rect x="0" y="258" width="400" height="42" fill="url(#hatch)"/>
+  <line x1="95" y1="250" x2="305" y2="250" stroke="var(--ink-2)" stroke-width="1.6"/>
+  <g style="font:500 12px var(--f-body);fill:var(--ink-2)"><line x1="132" y1="278" x2="162" y2="278" stroke="var(--ink-2)" stroke-width="1.6" stroke-dasharray="5 4"/><text x="170" y="282">Penampang rencana</text></g>`;
+}
+
+/* ---------- results ---------- */
+const icoOk='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const icoNo='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v6M8 12.2v.3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+function card(name,color,v){
+  const ok=v<=10, near=v>10&&v<=12;
+  const cls=ok?'good':(near?'mid':'bad'), txt=ok?'Di bawah 10%':(near?'Sedikit di atas 10%':'Di atas 10%');
+  const MAXV=30, pos=Math.max(0,Math.min(MAXV,v))/MAXV*100;
+  return `<div class="card res"><div class="res-h"><i class="sw" style="background:${color}"></i>${name}</div>
+  <div class="big">${fmt(v,1)}<small>%</small></div>
+  <span class="chip ${cls}">${ok?icoOk:icoNo}${txt}</span>
+  <div class="meter" aria-hidden="true"><div class="trk"><div class="ok" style="width:${10/MAXV*100}%"></div></div><div class="thr" style="left:${10/MAXV*100}%"></div><span class="thr-l" style="left:${10/MAXV*100}%">10</span><span class="mk" style="left:${pos}%;background:${color}"></span><div class="ends"><span>0</span><span>30%</span></div></div></div>`;
+}
+function render(){
+  const a=anf(S), r=mra(S), ob=tunnelModel==='reg'?r:a;
+  drawTunnel(ob,S[2]);
+  $('#results').innerHTML=card('Regresi linear','var(--reg)',r)+card('ANFIS','var(--anf)',a);
+  const md=mahal(S), inside=md<=M.thr, gap=Math.abs(r-a);
+  let h='';
+  if(!inside) h+=`<div class="note warn">${icoNo}<span>Kombinasi ini berada di luar jangkauan data pelatihan (jarak ${fmt(md,2)} dari batas ${fmt(M.thr,2)}). Anggap hasilnya perkiraan kasar.</span></div>`;
+  else h+=`<div class="note ok">${icoOk}<span>Kombinasi ini berada dalam jangkauan data pelatihan, jadi kedua prediksi dapat dipakai.</span></div>`;
+  if(gap>3) h+=`<div class="note">${icoNo}<span>Kedua model berbeda ${fmt(gap,1)} poin. Regresi linear terus naik atau turun, ANFIS mendatar di tepi rentang data. Periksa kembali nilai yang berada di ujung rentang.</span></div>`;
+  $('#support').innerHTML=h;
+  drawSens();
+}
+$('#tgReg').onclick=()=>{tunnelModel='reg';$('#tgReg').setAttribute('aria-pressed','true');$('#tgAnf').setAttribute('aria-pressed','false');render();};
+$('#tgAnf').onclick=()=>{tunnelModel='anf';$('#tgAnf').setAttribute('aria-pressed','true');$('#tgReg').setAttribute('aria-pressed','false');render();};
+$('#pMean').onclick=()=>setAll([3.14,17.2,23.5,2.0,0.48,40]);
+let recBest=null;
+(function pickRec(){
+  const g=M.grid.find(x=>x.A===21&&x.Drill===2&&x.tier)||M.grid.find(x=>x.tier);
+  recBest=[g.PF,g.W,g.A,g.Drill,g.ppf,40];
+})();
+$('#pRec').onclick=()=>setAll(recBest);
+
+/* ---------- rekomendasi ---------- */
+let drillSel=2.0;
+function drawRec(){
+  const seg=$('#drillSeg'); seg.innerHTML='';
+  [1.5,2.0,2.5].forEach(d=>{const b=document.createElement('button');b.type='button';b.textContent='Drill '+fmt(d,1)+' m';b.setAttribute('aria-pressed',d===drillSel);b.onclick=()=>{drillSel=d;drawRec();};seg.appendChild(b);});
+  const bar=(lo,hi,rec,i)=>{const L=M.mn[i],H=M.mx[i],f=v=>((v-L)/(H-L)*100).toFixed(1);return `<span class="rbar"><i style="left:${f(lo)}%;width:${(f(hi)-f(lo)).toFixed(1)}%"></i><b style="left:${f(rec)}%"></b></span>`;};
+  let h='<thead><tr><th>A (m²)</th><th>Status</th><th>PF (kg/m³)</th><th>W (kg)</th><th>ppf</th><th class="n">MRA</th><th class="n">ANFIS</th><th></th></tr></thead><tbody>';
+  M.grid.filter(g=>g.Drill===drillSel).forEach(g=>{
+    if(!g.tier){h+=`<tr><td class="num">${fmt(g.A,1)}</td><td><span class="pill bad">Tidak ada kombinasi aman</span></td><td colspan="6" style="color:var(--ink-3)">Pada A dan Drill ini, tidak ada kombinasi dalam jangkauan data yang diprediksi di bawah 10%.</td></tr>`;return;}
+    const rg=(k,i,d)=>{const lo=Math.min(g[k+'_lo'],g[k]),hi=Math.max(g[k+'_hi'],g[k]);return `<td class="rng-cell"><span class="v">${fmt(lo,d)}–${fmt(hi,d)}</span>${bar(lo,hi,g[k],i)}</td>`;};
+    const P=[g.PF,g.W,g.A,g.Drill,g.ppf,40], m1=mra(P), a1=anf(P);
+    h+=`<tr><td class="num"><b>${fmt(g.A,1)}</b></td><td><span class="pill ${g.tier===1?'good':'mid'}">${g.tier===1?'Target 8%':'Batas 10%'}</span></td>${rg('PF',0,2)}${rg('W',1,1)}${rg('ppf',4,2)}<td class="n">${fmt(m1,1)}%</td><td class="n" style="${a1>10?'color:var(--bad);font-weight:500':''}">${a1>10?'! ':''}${fmt(a1,1)}%</td><td><button class="btn" type="button" data-a="${g.A}" data-d="${g.Drill}">Terapkan</button></td></tr>`;
+  });
+  $('#recTable').innerHTML=h+'</tbody>';
+  document.querySelectorAll('#recTable button[data-a]').forEach(b=>b.onclick=()=>{
+    const g=M.grid.find(x=>x.A===+b.dataset.a&&x.Drill===+b.dataset.d);setAll([g.PF,g.W,g.A,g.Drill,g.ppf,40]);document.getElementById('kalkulator').scrollIntoView({behavior:'smooth'});
+  });
+}
+
+/* ---------- chart helpers ---------- */
+function niceMax(v){return Math.ceil(v/5)*5;}
+function tipEl(host){let t=host.querySelector('.tip');if(!t){t=document.createElement('div');t.className='tip';host.appendChild(t);}return t;}
+function placeTip(host,t,clientX,clientY){const b=host.getBoundingClientRect();let x=clientX-b.left+14,y=clientY-b.top-10;const w=t.offsetWidth;if(x+w>b.width-4)x=clientX-b.left-w-14;if(y<0)y=4;t.style.left=x+'px';t.style.top=y+'px';}
+
+/* ---------- sensitivitas ---------- */
+let sensK=2;
+function drawTabs(){
+  const host=$('#sensTabs'); host.innerHTML='';
+  NM.forEach((n,i)=>{const b=document.createElement('button');b.type='button';b.textContent=n;b.setAttribute('role','tab');b.setAttribute('aria-selected',i===sensK);b.onclick=()=>{sensK=i;drawTabs();drawSens();};host.appendChild(b);});
+}
+function drawSens(){
+  const host=$('#sensChart'); const k=sensK, W=Math.max(300,host.clientWidth||720), H=W<520?320:380, ml=W<520?38:46, mr=W<520?52:70, mt=14, mb=48;
+  const N=80, xs=[], rs=[], as=[];
+  for(let i=0;i<N;i++){const x=M.mn[k]+(M.mx[k]-M.mn[k])*i/(N-1);const P=S.slice();P[k]=x;xs.push(x);rs.push(mra(P));as.push(anf(P));}
+  let lo=Math.min(0,Math.floor(Math.min(...rs,...as)/5)*5), hi=Math.max(30,niceMax(Math.max(...rs,...as)));
+  const X=v=>ml+(v-M.mn[k])/(M.mx[k]-M.mn[k])*(W-ml-mr), Y=v=>mt+(hi-v)/(hi-lo)*(H-mt-mb);
+  const line=a=>'M'+a.map((v,i)=>X(xs[i]).toFixed(1)+','+Y(v).toFixed(1)).join('L');
+  let g='';
+  for(let v=lo;v<=hi;v+=5)g+=`<line x1="${ml}" x2="${W-mr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${ml-8}" y="${Y(v)+4}" text-anchor="end">${v}</text>`;
+  const nt=W<520?3:5; for(let i=0;i<=nt;i++){const v=M.mn[k]+(M.mx[k]-M.mn[k])*i/nt;g+=`<text x="${X(v)}" y="${H-mb+18}" text-anchor="middle">${fmt(v,DEC[k]>1?2:DEC[k])}</text>`;}
+  const bx0=X(M.p10[k]), bx1=X(M.p90[k]);
+  const cur=S[k], Pc=S.slice(); const yr=mra(Pc), ya=anf(Pc);
+  const ly=[rs[N-1],as[N-1]].map(Y); let l1=ly[0],l2=ly[1]; if(Math.abs(l1-l2)<15){const m=(l1+l2)/2;if(l1<l2){l1=m-8;l2=m+8}else{l1=m+8;l2=m-8}}
+  host.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Sensitivitas overbreak terhadap ${NM[k]}">
+   <rect x="${bx0}" y="${mt}" width="${Math.max(2,bx1-bx0)}" height="${H-mt-mb}" fill="var(--line)" opacity=".55"/>
+   ${g}
+   <line x1="${ml}" x2="${W-mr}" y1="${Y(10)}" y2="${Y(10)}" stroke="var(--ink)" stroke-width="1.2" stroke-dasharray="5 4"/>
+   <text x="${ml+6}" y="${Y(10)-6}" style="fill:var(--ink-2)">batas 10%</text>
+   <path d="${line(rs)}" fill="none" stroke="var(--reg)" stroke-width="2.4" stroke-linejoin="round"/>
+   <path d="${line(as)}" fill="none" stroke="var(--anf)" stroke-width="2.4" stroke-linejoin="round"/>
+   <g class="ax"><text class="t" x="${(ml+W-mr)/2}" y="${H-6}" text-anchor="middle">${NM[k]}${UN[k]?' ('+UN[k]+')':''}</text><text class="t" transform="translate(12 ${(mt+H-mb)/2}) rotate(-90)" text-anchor="middle">Prediksi overbreak (%)</text></g>
+   <circle cx="${X(cur)}" cy="${Y(yr)}" r="6" fill="var(--reg)" stroke="var(--surface)" stroke-width="2.5"/>
+   <circle cx="${X(cur)}" cy="${Y(ya)}" r="6" fill="var(--anf)" stroke="var(--surface)" stroke-width="2.5"/>
+   <g style="font:600 12px var(--f-body)"><text x="${W-mr+8}" y="${l1+4}" style="fill:var(--ink);font-family:var(--f-body);font-size:12px;font-weight:600">MRA</text><text x="${W-mr+8}" y="${l2+4}" style="fill:var(--ink);font-family:var(--f-body);font-size:12px;font-weight:600">ANFIS</text></g>
+   <line id="sx" y1="${mt}" y2="${H-mb}" stroke="var(--ink-2)" stroke-width="1" opacity="0"/>
+   <circle id="sd1" r="5" fill="var(--reg)" stroke="var(--surface)" stroke-width="2" opacity="0"/><circle id="sd2" r="5" fill="var(--anf)" stroke="var(--surface)" stroke-width="2" opacity="0"/>
+   <rect id="sh" x="${ml}" y="${mt}" width="${W-ml-mr}" height="${H-mt-mb}" fill="transparent" style="cursor:crosshair"/></svg>`;
+  const t=tipEl(host), svg=host.querySelector('svg'), sh=host.querySelector('#sh'), sx=host.querySelector('#sx'), d1=host.querySelector('#sd1'), d2=host.querySelector('#sd2');
+  const move=e=>{const bb=svg.getBoundingClientRect(), px=(e.clientX-bb.left)/bb.width*W; let f=(px-ml)/(W-ml-mr); f=Math.max(0,Math.min(1,f)); const i=Math.round(f*(N-1));
+    sx.setAttribute('x1',X(xs[i]));sx.setAttribute('x2',X(xs[i]));sx.setAttribute('opacity','1');
+    d1.setAttribute('cx',X(xs[i]));d1.setAttribute('cy',Y(rs[i]));d1.setAttribute('opacity','1');d2.setAttribute('cx',X(xs[i]));d2.setAttribute('cy',Y(as[i]));d2.setAttribute('opacity','1');
+    t.innerHTML=`<div class="h">${NM[k]} = ${fmt(xs[i],DEC[k]>1?2:DEC[k]+1)}${UN[k]?' '+UN[k]:''}</div><div class="r"><span><i class="sw" style="background:var(--reg)"></i>Regresi</span><b>${fmt(rs[i],1)}%</b></div><div class="r"><span><i class="sw" style="background:var(--anf)"></i>ANFIS</span><b>${fmt(as[i],1)}%</b></div>`;
+    t.classList.add('on'); placeTip(host,t,e.clientX,e.clientY);};
+  sh.addEventListener('pointermove',move); sh.addEventListener('pointerdown',move);
+  sh.addEventListener('pointerleave',()=>{t.classList.remove('on');sx.setAttribute('opacity','0');d1.setAttribute('opacity','0');d2.setAttribute('opacity','0');});
+}
+function drawTornado(){
+  const mean=M.mean, res=NM.map((n,i)=>{const a=mean.slice(),b=mean.slice();a[i]=M.p10[i];b[i]=M.p90[i];return {n,i,r:mra(b)-mra(a),a:anf(b)-anf(a)};}).sort((x,y)=>Math.abs(y.r)-Math.abs(x.r));
+  const W=Math.max(280,$('#tornado').clientWidth||460),rowH=54,H=res.length*rowH+34,ml=44,mr=40,lim=Math.ceil(Math.max(...res.map(o=>Math.max(Math.abs(o.r),Math.abs(o.a))))/5)*5+5;
+  const X=v=>ml+(v+lim)/(2*lim)*(W-ml-mr), z=X(0); let g='';
+  for(let v=-lim;v<=lim;v+=5)g+=`<line x1="${X(v)}" x2="${X(v)}" y1="0" y2="${H-24}" stroke="var(--line)"/><text x="${X(v)}" y="${H-6}" text-anchor="middle">${v>0?'+'+v:v}</text>`;
+  res.forEach((o,j)=>{const y=j*rowH+8;
+    const bar=(v,yy,c)=>{const x0=Math.min(z,X(v)),w=Math.abs(X(v)-z);return `<rect x="${x0}" y="${yy}" width="${Math.max(1,w)}" height="16" rx="3" fill="${c}"/><text x="${v>=0?X(v)+6:X(v)-6}" y="${yy+12}" text-anchor="${v>=0?'start':'end'}" style="fill:var(--ink);font-size:12px">${v>0?'+':''}${fmt(v,1)}</text>`;};
+    g+=`<text x="${ml-8}" y="${y+22}" text-anchor="end" style="fill:var(--ink);font:600 13px var(--f-disp)">${o.n}</text>${bar(o.r,y,'var(--reg)')}${bar(o.a,y+19,'var(--anf)')}`;
+  });
+  g+=`<line x1="${z}" x2="${z}" y1="0" y2="${H-24}" stroke="var(--ink-2)"/>`;
+  $('#tornado').innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Diagram tornado pengaruh parameter">${g}</svg>
+  <div class="legend" style="margin-top:6px"><span><i class="sw" style="background:var(--reg)"></i>Regresi linear</span><span><i class="sw" style="background:var(--anf)"></i>ANFIS</span></div>`;
+}
+
+/* ---------- scatter ---------- */
+function drawScatter(){
+  const host=$('#scatter'),W=Math.max(300,host.clientWidth||560),H=Math.round(W*(W<520?0.95:0.82)),ml=W<520?36:46,mr=14,mt=12,mb=46,hi=30,lo=0;
+  const X=v=>ml+(v-lo)/(hi-lo)*(W-ml-mr), Y=v=>mt+(hi-v)/(hi-lo)*(H-mt-mb);
+  let g='';
+  for(let v=0;v<=30;v+=5)g+=`<line x1="${ml}" x2="${W-mr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${ml-8}" y="${Y(v)+4}" text-anchor="end">${v}</text><text x="${X(v)}" y="${H-mb+18}" text-anchor="middle">${v}</text>`;
+  const pts=[]; M.data.forEach((d,i)=>{pts.push({i,o:d[6],v:M.pred_reg[i],m:'reg'});pts.push({i,o:d[6],v:M.pred_anf[i],m:'anf'});});
+  let dots=pts.map(p=>p.m==='reg'?`<circle cx="${X(p.o)}" cy="${Y(p.v)}" r="5" fill="var(--reg)" fill-opacity=".9" stroke="var(--surface)" stroke-width="1.5"/>`:`<rect x="${X(p.o)-4.5}" y="${Y(p.v)-4.5}" width="9" height="9" transform="rotate(45 ${X(p.o)} ${Y(p.v)})" fill="var(--anf)" fill-opacity=".9" stroke="var(--surface)" stroke-width="1.5"/>`).join('');
+  host.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Sebaran overbreak aktual melawan prediksi">${g}
+   <line x1="${X(0)}" y1="${Y(0)}" x2="${X(30)}" y2="${Y(30)}" stroke="var(--ink-2)" stroke-width="1.2"/>
+   <line x1="${ml}" x2="${W-mr}" y1="${Y(10)}" y2="${Y(10)}" stroke="var(--ink)" stroke-dasharray="5 4"/><line x1="${X(10)}" x2="${X(10)}" y1="${mt}" y2="${H-mb}" stroke="var(--ink)" stroke-dasharray="5 4"/>
+   <text x="${W-mr-4}" y="${Y(10)-6}" text-anchor="end" style="fill:var(--ink-2)">prediksi 10%</text><text x="${X(10)+6}" y="${mt+12}" style="fill:var(--ink-2)">aktual 10%</text>
+   <text class="t" x="${(ml+W-mr)/2}" y="${H-6}" text-anchor="middle" style="font-family:var(--f-body);font-size:12.5px;fill:var(--ink-2)">Overbreak aktual (%)</text>
+   <text transform="translate(12 ${(mt+H-mb)/2}) rotate(-90)" text-anchor="middle" style="font-family:var(--f-body);font-size:12.5px;fill:var(--ink-2)">Prediksi model (%)</text>
+   ${dots}<rect id="scH" x="${ml}" y="${mt}" width="${W-ml-mr}" height="${H-mt-mb}" fill="transparent"/></svg>`;
+  const t=tipEl(host), svg=host.querySelector('svg'), h=host.querySelector('#scH');
+  h.addEventListener('pointermove',e=>{const bb=svg.getBoundingClientRect(),px=(e.clientX-bb.left)/bb.width*W,py=(e.clientY-bb.top)/bb.height*H;
+    let best=null,bd=1e9;pts.forEach(p=>{const d=Math.hypot(X(p.o)-px,Y(p.v)-py);if(d<bd){bd=d;best=p;}});
+    if(bd>20){t.classList.remove('on');return;}
+    const d=M.data[best.i];
+    t.innerHTML=`<div class="h">Data ke-${best.i+1}</div><div class="r"><span>Aktual</span><b>${fmt(best.o,0)}%</b></div><div class="r"><span><i class="sw" style="background:var(--${best.m})"></i>${best.m==='reg'?'Regresi':'ANFIS'}</span><b>${fmt(best.v,1)}%</b></div><div class="r"><span>A / Drill</span><b>${fmt(d[2],1)} / ${fmt(d[3],1)}</b></div>`;
+    t.classList.add('on');placeTip(host,t,e.clientX,e.clientY);});
+  h.addEventListener('pointerleave',()=>t.classList.remove('on'));
+}
+
+/* ---------- tabel ---------- */
+let sortK=0, sortDir=1;
+function drawTable(){
+  const only=$('#onlyLow').checked;
+  const cols=[['No',i=>i+1,0],['PF',i=>M.data[i][0],2],['W',i=>M.data[i][1],1],['A',i=>M.data[i][2],1],['Drill',i=>M.data[i][3],1],['ppf',i=>M.data[i][4],2],['RQD',i=>M.data[i][5],0],['OB aktual',i=>M.data[i][6],0],['MRA',i=>M.pred_reg[i],1],['ANFIS',i=>M.pred_anf[i],1],['|Galat| MRA',i=>Math.abs(M.pred_reg[i]-M.data[i][6]),1],['|Galat| ANFIS',i=>Math.abs(M.pred_anf[i]-M.data[i][6]),1]];
+  let idx=[...Array(M.data.length).keys()].filter(i=>!only||M.data[i][6]<10);
+  idx.sort((a,b)=>(cols[sortK][1](a)-cols[sortK][1](b))*sortDir);
+  let h='<thead><tr>'+cols.map((c,j)=>`<th class="n" aria-sort="${j===sortK?(sortDir>0?'ascending':'descending'):'none'}"><button type="button" data-k="${j}">${c[0]}<span aria-hidden="true">${j===sortK?(sortDir>0?'↑':'↓'):''}</span></button></th>`).join('')+'</tr></thead><tbody>';
+  idx.forEach(i=>{h+='<tr>'+cols.map((c,j)=>`<td class="n"${j===7&&M.data[i][6]<10?' style="color:var(--good);font-weight:500"':''}>${fmt(c[1](i),c[2])}</td>`).join('')+'</tr>';});
+  $('#dataTable').innerHTML=h+'</tbody>';
+  document.querySelectorAll('#dataTable th button').forEach(b=>b.onclick=()=>{const k=+b.dataset.k;if(k===sortK)sortDir*=-1;else{sortK=k;sortDir=1;}drawTable();});
+}
+$('#onlyLow').onchange=drawTable;
+
+/* ---------- metode ---------- */
+function drawMethod(){
+  const m=(o,k)=>o[k];
+  const rowsM=[['R²','R2',3],['RMSE','RMSE',2],['MAE','MAE',2],['MAPE (%)','MAPE',1]];
+  $('#metrics').innerHTML='<thead><tr><th>Ukuran</th><th class="n">Regresi</th><th class="n">ANFIS</th></tr></thead><tbody>'+rowsM.map(r=>`<tr><td>${r[0]}</td><td class="n">${fmt(M.met_reg[r[1]],r[2])}</td><td class="n">${fmt(M.met_anf[r[1]],r[2])}</td></tr>`).join('')+'</tbody>';
+  const sg=v=>(v<0?'− ':'+ ')+fmt(Math.abs(v),3);
+  $('#eq').innerHTML='OB (%) = '+fmt(M.b[0],2)+'<br>'+NM.map((n,i)=>sg(M.b[i+1])+' × '+n).join('<br>');
+  $('#ranges').innerHTML='<thead><tr><th>Param.</th><th class="n">Min</th><th class="n">Rata-rata</th><th class="n">Maks</th></tr></thead><tbody>'+NM.map((n,i)=>`<tr><td><b>${n}</b></td><td class="n">${fmt(M.mn[i],DEC[i])}</td><td class="n">${fmt(M.mean[i],DEC[i])}</td><td class="n">${fmt(M.mx[i],DEC[i])}</td></tr>`).join('')+'</tbody>';
+}
+
+buildSliders(); drawTabs(); sync(null); drawRec(); drawTornado(); drawScatter(); drawTable(); drawMethod();
+let lw=window.innerWidth,tm;addEventListener('resize',()=>{clearTimeout(tm);tm=setTimeout(()=>{if(window.innerWidth!==lw){lw=window.innerWidth;drawSens();drawTornado();drawScatter();}},150);});
+window.__test={mra,anf,S};
+})();
+</script>
+
+</body>
+</html>
